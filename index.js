@@ -53,7 +53,7 @@ function broadcastOnlineUsers() {
 }
 
 io.on("connection", (socket) => {
-  console.log("✅ New socket connected:", socket.id);
+  console.log(`✅ New socket connected: ${socket.id}`);
 
   socket.on("login", (username) => {
     try {

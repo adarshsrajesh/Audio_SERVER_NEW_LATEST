@@ -13,7 +13,8 @@ dotenv.config();
 app.use(cors({
   origin: ['http://127.0.0.1:5501', 'http://localhost:5501', 'http://127.0.0.1:5500', 'http://localhost:5500','https://audio-server-client-new-latest.vercel.app'],
   methods: ['GET', 'POST'],
-  credentials: true
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(express.json());
@@ -23,14 +24,22 @@ const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
 const client = twilio(accountSid, authToken);
 
+// Add error handling for missing Twilio credentials
+if (!accountSid || !authToken) {
+  console.error('Missing Twilio credentials. Please set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN environment variables.');
+}
+
 app.get('/turn-credentials', async (req, res) => {
   try {
+    if (!accountSid || !authToken) {
+      throw new Error('Twilio credentials not configured');
+    }
     const token = await client.tokens.create();
     console.log('TURN config:', token.iceServers);
     res.json({ iceServers: token.iceServers });
   } catch (error) {
     console.error('Error creating TURN token:', error);
-    res.status(500).json({ error: 'Failed to get TURN credentials' });
+    res.status(500).json({ error: 'Failed to get TURN credentials', details: error.message });
   }
 });
 
@@ -174,21 +183,21 @@ io.on("connection", (socket) => {
   socket.on("ice-candidate", ({ toUserId, candidate }) => {
     try {
       if (!toUserId || !candidate || !candidate.candidate) {
-        console.error("Invalid ICE candidate data:", { toUserId, candidate });
+        console.error(`Invalid ICE candidate data: ${JSON.stringify({ toUserId, candidate })}`);
         socket.emit("error", "Invalid ICE candidate data");
         return;
       }
 
       const targetSocketId = onlineUsers[toUserId];
       if (!targetSocketId) {
-        console.error("Target user not found:", toUserId);
+        console.error(`Target user not found: ${toUserId}`);
         socket.emit("error", "User is not online");
         return;
       }
 
       // Check if the sender is online
       if (!socket.username || !onlineUsers[socket.username]) {
-        console.error("Sender not logged in:", socket.username);
+        console.error(`Sender not logged in: ${socket.username}`);
         socket.emit("error", "You must be logged in to send ICE candidates");
         return;
       }
